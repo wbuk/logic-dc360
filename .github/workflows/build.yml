@@ -1,0 +1,115 @@
+# Builds Logic (https://github.com/jppellet/Logic-Circuit-Simulator, MIT) and publishes it as a release, because
+# Logic itself does not publish built releases. DC360 Libraries (Libraries > Apps) checks these releases, downloads
+# logic-dc360.zip and applies DC360's own changes on the DC360 server. Nothing DC360-specific is here.
+#
+# Runs every night: if Logic's master branch has a new commit, it is built with Logic's own bundler
+# (tools/bundle.js --dist) and released as vYYYY.MMDD.HHMM (the time of that commit, UTC), so newer is always higher.
+# Logic's editor asks for Bootstrap 4.6.1 and jQuery 3.5.1 from a CDN; exact copies of those two (both MIT) are put
+# in vendor/ so a site can serve everything itself.
+name: Build Logic
+
+on:
+  schedule:
+    - cron: '37 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+
+      - name: Check out Logic (master)
+        uses: actions/checkout@v4
+        with:
+          repository: jppellet/Logic-Circuit-Simulator
+          ref: master
+          path: logic
+
+      - name: Work out the version
+        id: ver
+        run: |
+          cd logic
+          SHA=$(git rev-parse HEAD)
+          VERSION=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y.%m%d.%H%M)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "date=$(TZ=UTC git log -1 --format=%cd --date=format-local:'%d %b %Y %H:%M UTC')" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Logic has not changed since v$VERSION: nothing to build."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: steps.ver.outputs.exists == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build Logic
+        if: steps.ver.outputs.exists == 'false'
+        working-directory: logic
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node tools/bundle.js --dist
+          OUT="$GITHUB_WORKSPACE/out"
+          mkdir -p "$OUT/simulator/lib" "$OUT/vendor"
+          cp index-dist.html "$OUT/index.html"
+          cp simulator/lib/bundle.js "$OUT/simulator/lib/bundle.js"
+          for f in favicon.svg favicon.ico apple-touch-icon.png; do [ -f "$f" ] && cp "$f" "$OUT/"; done
+          cp LICENSE "$OUT/LICENSE.txt"
+          # The exact Bootstrap and jQuery versions Logic's editor asks for, from npm (both MIT).
+          BS=$(grep -o 'npm/bootstrap@[0-9.]*' simulator/html/LogicEditorTemplate.html | head -1 | cut -d@ -f2)
+          JQ=$(grep -o 'npm/jquery@[0-9.]*' simulator/html/LogicEditorTemplate.html | head -1 | cut -d@ -f2)
+          echo "Bootstrap $BS, jQuery $JQ"
+          cd "$RUNNER_TEMP"
+          npm pack "bootstrap@$BS" "jquery@$JQ" --silent
+          mkdir bs jq && tar -xzf bootstrap-$BS.tgz -C bs && tar -xzf jquery-$JQ.tgz -C jq
+          mkdir -p "$OUT/vendor/bootstrap@$BS/dist/css" "$OUT/vendor/bootstrap@$BS/dist/js" "$OUT/vendor/jquery@$JQ/dist"
+          cp bs/package/dist/css/bootstrap.min.css "$OUT/vendor/bootstrap@$BS/dist/css/"
+          cp bs/package/dist/js/bootstrap.bundle.min.js "$OUT/vendor/bootstrap@$BS/dist/js/"
+          cp bs/package/LICENSE "$OUT/vendor/bootstrap@$BS/LICENSE.txt"
+          cp jq/package/dist/jquery.slim.min.js "$OUT/vendor/jquery@$JQ/dist/"
+          cp jq/package/LICENSE.txt "$OUT/vendor/jquery@$JQ/LICENSE.txt"
+          printf '{"source":"jppellet/Logic-Circuit-Simulator","commit":"%s","version":"%s","bootstrap":"%s","jquery":"%s","built":"%s"}\n' \
+            "${{ steps.ver.outputs.sha }}" "${{ steps.ver.outputs.version }}" "$BS" "$JQ" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$OUT/logic-build.json"
+          cd "$OUT" && zip -qr "$GITHUB_WORKSPACE/logic-dc360.zip" .
+
+      - name: Check the build
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          unzip -l logic-dc360.zip | grep -q ' index.html$'
+          unzip -l logic-dc360.zip | grep -q 'simulator/lib/bundle.js$'
+          unzip -l logic-dc360.zip | grep -q 'bootstrap.min.css$'
+          unzip -l logic-dc360.zip | grep -q 'jquery.slim.min.js$'
+
+      - name: Publish the release
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          gh release create "v${{ steps.ver.outputs.version }}" logic-dc360.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Logic ${{ steps.ver.outputs.version }}" \
+            --notes "Logic built from jppellet/Logic-Circuit-Simulator master, commit ${{ steps.ver.outputs.sha }} (${{ steps.ver.outputs.date }}). Logic is by Jean-Philippe Pellet (HEP Vaud), MIT License (LICENSE.txt in the zip). Includes Bootstrap and jQuery (MIT) in vendor/."
+
+      # GitHub switches off nightly jobs in a repository with no activity for 60 days. On the 1st of each month
+      # this records the last check, which keeps the nightly build running even when Logic has not changed.
+      - name: Keep the nightly build switched on
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "$(date -u +%d)" = "01" ]; then
+            date -u +%Y-%m-%dT%H:%M:%SZ > last-check.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            git add last-check.txt
+            git commit -m "Monthly check (keeps the nightly build switched on)"
+            git push
+          fi
