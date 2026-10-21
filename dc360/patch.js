@@ -114,9 +114,11 @@ edit('images.ts', 'add the DC360 parts\' pictures', src => {
     return afterLine(src, /^\s+DisplayBar,\r?$/, names.map(n => n + ',').join('\n'));
 });
 
-// Bigger IN and OUT on the drawing (the 1-bit circles: 26 px -> 40 px, their 0 / 1 text 18 px -> 26 px). Their
-// connection points stay where they were, so saved circuits keep their wiring.
-edit('drawutils.ts', 'make IN and OUT bigger on the drawing', src => {
+// Bigger parts on the drawing, for younger students (zoom stays at 100%, for accessibility only):
+// - every part is drawn on a bigger grid square (10 px -> 15 px), so gates and all other parts are 1.5 times bigger;
+// - the 1-bit IN and OUT circles are 40 px (from 26 px) with bigger 0 / 1 text (18 px -> 26 px).
+edit('drawutils.ts', 'make all parts bigger on the drawing', src => {
+    src = once(src, 'export const GRID_STEP = 10', 'export const GRID_STEP = 15');
     src = once(src, 'export const INPUT_OUTPUT_DIAMETER = 26', 'export const INPUT_OUTPUT_DIAMETER = 40');
     // drawValueTextCentered is only used for the 1-bit IN and OUT: those get the big text
     src = once(src, 'drawValueText(g, value, comp.posX, comp.posY, opts)', 'drawValueText(g, value, comp.posX, comp.posY, { ...opts, big: true } as any)');
