@@ -56,11 +56,13 @@ function afterLine(src, re, text, times) {
 copyDir(path.join(here, 'src'), path.join(sim, 'src'));
 copyDir(path.join(here, 'img'), path.join(sim, 'img'));
 
-// DC360's parts: [Def, file in components/, button / picture name, hover text, button caption]. The Push Button is
-// Logic's own IN, made a push button (see ComponentMenu and ComponentFactory below), so it has no Def here.
+// DC360's parts: [Def, file in components/, button / picture name, hover text, button caption, button params]. The
+// Push Button is Logic's own IN, made a push button (see ComponentMenu and ComponentFactory below), so it has no Def.
 const PARTS = [
     ['DC360BulbDef', 'DC360Lights', 'DC360Bulb', 'Light bulb: lights up when its input is 1', 'Light Bulb'],
     ['DC360LampDef', 'DC360Lights', 'DC360Lamp', 'Table lamp: lights up when its input is 1', 'Table Lamp'],
+    ['DC360LedDef', 'DC360Led', 'DC360Led', 'LED: on for 1, off for 0, in any colour (right-click)', 'LED', '{ bits: 1 }'],
+    ['DC360LedDef', 'DC360Led', 'DC360Leds', 'LEDs for a binary number: 1, 2, 4 or 8 LEDs, any colour (right-click)', 'Binary LEDs', '{ bits: 4 }'],
     ['DC360BellDef', 'DC360Panels', 'DC360Bell', 'Alarm bell: shakes and rings while its input is 1', 'Alarm Bell'],
     ['DC360TrafficDef', 'DC360Panels', 'DC360Traffic', 'UK traffic lights: one input each for red, amber and green', 'Traffic Lights'],
     ['DC360CrossingDef', 'DC360Panels', 'DC360Crossing', 'UK crossing lights: red, amber, green, and the red and green man', 'Crossing'],
@@ -69,11 +71,12 @@ const PARTS = [
 const PUSH = ['DC360PushButton', 'Push button: an input that is 1 only while you hold it down', 'Push Button'];
 
 const files = [...new Set(PARTS.map(p => p[1]))];
-const imports = files.map(f => 'import { ' + PARTS.filter(p => p[1] === f).map(p => p[0]).join(', ') + ' } from "./components/' + f + '"').join('\n');
+const imports = files.map(f => 'import { ' + [...new Set(PARTS.filter(p => p[1] === f).map(p => p[0]))].join(', ') + ' } from "./components/' + f + '"').join('\n');
+const defs = [...new Set(PARTS.map(p => p[0]))];
 
 edit('ComponentFactory.ts', 'register the DC360 parts and make the Push Button a push button', src => {
     src = afterLine(src, /^import \{ DisplayBar, DisplayBarDef \} from "\.\/components\/DisplayBar"\r?$/, imports);
-    src = afterLine(src, /^\s+PixelDef,\r?$/, PARTS.map(p => p[0] + ',').join('\n'));
+    src = afterLine(src, /^\s+PixelDef,\r?$/, defs.map(d => d + ',').join('\n'));
     // A button marked data-dc360push gives an IN that is a push button.
     return afterLine(src, /^\s+const params = paramsStr === undefined \? undefined : JSON5\.parse\(paramsStr\) as Record<string, unknown>\r?$/,
         'if (elem.dataset.dc360push === "1") {\n    const pushComp = this.getMaker(compDataset.type)?.make(parent, params)\n    ;(pushComp as any)?.doSetIsPushButton?.(true)\n    return pushComp\n}');
@@ -82,7 +85,7 @@ edit('ComponentFactory.ts', 'register the DC360 parts and make the Push Button a
 edit('ComponentMenu.ts', 'add the DC360 parts to Input/Output', src => {
     src = afterLine(src, /^import \{ DisplayBarDef \} from "\.\/components\/DisplayBar"\r?$/, imports);
     src = afterLine(src, /^\s+InputDef\.button\(\{ bits: 1 \}, "Input1"\),\r?$/, 'InputDef.button({ bits: 1 }, "' + PUSH[0] + '"),');
-    src = afterLine(src, /^\s+PixelDef\.button\(.*"Pixel".*\),\r?$/, PARTS.map(p => p[0] + '.button("' + p[2] + '"),').join('\n'));
+    src = afterLine(src, /^\s+PixelDef\.button\(.*"Pixel".*\),\r?$/, PARTS.map(p => p[0] + '.button(' + (p[5] ? p[5] + ', ' : '') + '"' + p[2] + '"),').join('\n'));
     // The Push Button's button is marked, so the part made from it is a push button.
     return afterLine(src, /^\s+const isGate = item\.type\.startsWith\(GateTypePrefix\)\r?$/,
         'if (stringsKey === "' + PUSH[0] + '") { (compButton.dataset as any).dc360push = "1" }');
