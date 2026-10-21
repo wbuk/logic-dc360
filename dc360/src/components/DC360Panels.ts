@@ -1,13 +1,15 @@
 // DC360 additions to Logic (github.com/wbuk/logic-dc360): UK Traffic Lights, Crossing Lights (with the red and green
 // man), a Door Entry panel (NO ENTRY / ENTER) and an Alarm Bell, for the Input/Output section. Each lamp has its own
 // input, so students build the logic that switches them. Copied into simulator/src/components/ by dc360/patch.js.
-import { COLOR_COMPONENT_BORDER, COLOR_HIGH_IMPEDANCE, COLOR_UNKNOWN, COMPONENT_OUTLINE_THICKNESS, DrawingRect, drawComponentName } from "../drawutils"
+import { COLOR_COMPONENT_BORDER, COLOR_HIGH_IMPEDANCE, COLOR_UNKNOWN, COMPONENT_OUTLINE_THICKNESS, DrawingRect, GRID_STEP, drawComponentName } from "../drawutils"
 import { mods, tooltipContent } from "../htmlgen"
 import { LogicValue, isHighImpedance, isUnknown } from "../utils"
 import { ComponentBase, ComponentName, ComponentNameRepr, Repr, defineComponent } from "./Component"
 import { DrawContext, DrawableParent, GraphicsRendering, MenuItems } from "./Drawable"
 
 const OUTLINE = "#333333"
+// Sizes drawn in pixels follow the size of a grid square, so the parts grow with it.
+const K = GRID_STEP / 10
 
 // A lamp's colour: lit, dark, or Logic's own colours for "not 0 or 1 yet".
 function lamp(v: LogicValue, on: string, off: string): string {
@@ -40,14 +42,14 @@ function circle(g: GraphicsRendering, x: number, y: number, r: number, fill: str
     g.stroke()
 }
 
-// The labels of the inputs, inside the left edge.
+// The labels of the inputs, inside the left edge, level with each input.
 function inputLabels(g: GraphicsRendering, b: DrawingRect, labels: [string, number][]) {
     g.fillStyle = "#4b5563"
-    g.font = "bold 9px sans-serif"
+    g.font = `bold ${Math.round(9 * K)}px sans-serif`
     g.textAlign = "left"
     g.textBaseline = "middle"
     for (const [text, y] of labels) {
-        g.fillText(text, b.left + 2, y)
+        g.fillText(text, b.left + 2 * K, y)
     }
 }
 
@@ -130,6 +132,11 @@ abstract class DC360PanelBase extends ComponentBase<PanelRepr, LogicValue[], any
 
     protected abstract drawPanel(g: GraphicsRendering, b: DrawingRect, v: LogicValue[]): void
 
+    // Each label level with its own input.
+    protected labelsAt(names: string[]): [string, number][] {
+        return names.map((n, i) => [n, this.inputs._all[i].posY] as [string, number])
+    }
+
     protected override doDraw(g: GraphicsRendering, ctx: DrawContext) {
         const b = this.bounds()
         for (const node of this.allNodes()) {
@@ -199,9 +206,8 @@ export class DC360Traffic extends DC360PanelBase {
     protected get title() { return "UK Traffic Lights" }
     protected get inputNames() { return ["Red", "Amber", "Green"] }
     protected drawPanel(g: GraphicsRendering, b: DrawingRect, v: LogicValue[]) {
-        const cy = (b.top + b.bottom) / 2
-        inputLabels(g, b, [["R", cy - 30], ["A", cy], ["G", cy + 30]])
-        drawTrafficHead(g, b.left + 14, b.top + 2, b.right - b.left - 16, b.bottom - b.top - 4, v[0], v[1], v[2])
+        inputLabels(g, b, this.labelsAt(["R", "A", "G"]))
+        drawTrafficHead(g, b.left + 14 * K, b.top + 2 * K, b.right - b.left - 16 * K, b.bottom - b.top - 4 * K, v[0], v[1], v[2])
     }
 }
 DC360TrafficDef.impl = DC360Traffic
@@ -241,23 +247,22 @@ export class DC360Crossing extends DC360PanelBase {
     protected get title() { return "UK Crossing Lights" }
     protected get inputNames() { return ["Red", "Amber", "Green", "Red man", "Green man"] }
     protected drawPanel(g: GraphicsRendering, b: DrawingRect, v: LogicValue[]) {
-        const cy = (b.top + b.bottom) / 2
-        inputLabels(g, b, [["R", cy - 40], ["A", cy - 20], ["G", cy], ["RM", cy + 20], ["GM", cy + 40]])
-        const h = b.bottom - b.top - 4
-        drawTrafficHead(g, b.left + 22, b.top + 2, 36, h, v[0], v[1], v[2])
+        inputLabels(g, b, this.labelsAt(["R", "A", "G", "RM", "GM"]))
+        const h = b.bottom - b.top - 4 * K
+        drawTrafficHead(g, b.left + 22 * K, b.top + 2 * K, 36 * K, h, v[0], v[1], v[2])
 
         // the crossing box: red man above, green man below
-        const x = b.left + 66
-        const w = b.right - x - 2
+        const x = b.left + 66 * K
+        const w = b.right - x - 2 * K
         g.fillStyle = "#111111"
-        roundRect(g, x, b.top + 2, w, h, 5)
+        roundRect(g, x, b.top + 2 * K, w, h, 5 * K)
         g.fill()
         g.lineWidth = 2.5
         g.strokeStyle = "#f8fafc"
         g.stroke()
         const s = Math.min(w, h / 2) * 0.62
-        drawMan(g, x + w / 2, b.top + 2 + h / 4, s, false, lamp(v[3], RED[0], RED[1]))
-        drawMan(g, x + w / 2, b.top + 2 + h * 3 / 4, s, true, lamp(v[4], GREEN[0], GREEN[1]))
+        drawMan(g, x + w / 2, b.top + 2 * K + h / 4, s, false, lamp(v[3], RED[0], RED[1]))
+        drawMan(g, x + w / 2, b.top + 2 * K + h * 3 / 4, s, true, lamp(v[4], GREEN[0], GREEN[1]))
     }
 }
 DC360CrossingDef.impl = DC360Crossing
@@ -269,31 +274,30 @@ export class DC360Door extends DC360PanelBase {
     protected get title() { return "Door Entry" }
     protected get inputNames() { return ["NO ENTRY", "ENTER"] }
     protected drawPanel(g: GraphicsRendering, b: DrawingRect, v: LogicValue[]) {
-        const cy = (b.top + b.bottom) / 2
-        inputLabels(g, b, [["NO", cy - 20], ["IN", cy + 20]])
-        const x = b.left + 20
-        const w = b.right - x - 2
-        const h = b.bottom - b.top - 4
+        inputLabels(g, b, this.labelsAt(["NO", "IN"]))
+        const x = b.left + 20 * K
+        const w = b.right - x - 2 * K
+        const h = b.bottom - b.top - 4 * K
         g.fillStyle = "#374151"
-        roundRect(g, x, b.top + 2, w, h, 6)
+        roundRect(g, x, b.top + 2 * K, w, h, 6 * K)
         g.fill()
         g.stroke()
         const sign = (y: number, text: string, value: LogicValue, colours: [string, string]) => {
             const on = value === true
             g.fillStyle = on ? colours[0] : "#1f2937"
-            roundRect(g, x + 5, y, w - 10, h / 2 - 8, 4)
+            roundRect(g, x + 5 * K, y, w - 10 * K, h / 2 - 8 * K, 4 * K)
             g.fill()
             g.lineWidth = 1.5
             g.strokeStyle = "#000000"
             g.stroke()
             g.fillStyle = isUnknown(value) || isHighImpedance(value) ? COLOR_UNKNOWN : on ? "#ffffff" : colours[1]
-            g.font = "bold 12px sans-serif"
+            g.font = `bold ${Math.round(12 * K)}px sans-serif`
             g.textAlign = "center"
             g.textBaseline = "middle"
-            g.fillText(text, x + w / 2, y + (h / 2 - 8) / 2)
+            g.fillText(text, x + w / 2, y + (h / 2 - 8 * K) / 2)
         }
-        sign(b.top + 7, "NO ENTRY", v[0], ["#e11d1d", "#7f1d1d"])
-        sign(b.top + 2 + h / 2 + 3, "ENTER", v[1], ["#16a34a", "#14532d"])
+        sign(b.top + 7 * K, "NO ENTRY", v[0], ["#e11d1d", "#7f1d1d"])
+        sign(b.top + 2 * K + h / 2 + 3 * K, "ENTER", v[1], ["#16a34a", "#14532d"])
     }
 }
 DC360DoorDef.impl = DC360Door
@@ -316,8 +320,8 @@ export class DC360Bell extends DC360PanelBase {
         const on = v[0] === true
         const cx = (b.left + b.right) / 2
         const w = b.right - b.left
-        const top = b.top + 4
-        const bottom = b.bottom - 9
+        const top = b.top + 4 * K
+        const bottom = b.bottom - 9 * K
         const angle = on ? Math.sin(Date.now() / 45) * 0.28 : 0
 
         g.save()
@@ -326,19 +330,19 @@ export class DC360Bell extends DC360PanelBase {
 
         // the bell
         g.beginPath()
-        g.moveTo(-w * 0.12, 4)
-        g.quadraticCurveTo(-w * 0.36, 8, -w * 0.36, (bottom - top) * 0.6)
+        g.moveTo(-w * 0.12, 4 * K)
+        g.quadraticCurveTo(-w * 0.36, 8 * K, -w * 0.36, (bottom - top) * 0.6)
         g.lineTo(-w * 0.46, bottom - top)
         g.lineTo(w * 0.46, bottom - top)
         g.lineTo(w * 0.36, (bottom - top) * 0.6)
-        g.quadraticCurveTo(w * 0.36, 8, w * 0.12, 4)
+        g.quadraticCurveTo(w * 0.36, 8 * K, w * 0.12, 4 * K)
         g.closePath()
         g.fillStyle = lamp(v[0], "#facc15", "#d4a017")
         g.fill()
         g.stroke()
         // the top knob and the clapper
-        circle(g, 0, 2, 3, "#9ca3af")
-        circle(g, 0, bottom - top + 4, 3.5, "#6b7280")
+        circle(g, 0, 2 * K, 3 * K, "#9ca3af")
+        circle(g, 0, bottom - top + 4 * K, 3.5 * K, "#6b7280")
         g.restore()
 
         // ringing lines either side
@@ -348,9 +352,9 @@ export class DC360Bell extends DC360PanelBase {
             g.beginPath()
             for (const side of [-1, 1]) {
                 const x = cx + side * w * 0.52
-                g.moveTo(x, top + 10); g.lineTo(x + side * 5, top + 6)
-                g.moveTo(x, top + 18); g.lineTo(x + side * 7, top + 18)
-                g.moveTo(x, top + 26); g.lineTo(x + side * 5, top + 30)
+                g.moveTo(x, top + 10 * K); g.lineTo(x + side * 5 * K, top + 6 * K)
+                g.moveTo(x, top + 18 * K); g.lineTo(x + side * 7 * K, top + 18 * K)
+                g.moveTo(x, top + 26 * K); g.lineTo(x + side * 5 * K, top + 30 * K)
             }
             g.stroke()
             this.ring()

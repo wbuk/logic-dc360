@@ -2,7 +2,7 @@
 // input each (from above; bit 0 on the right, like a written binary number), each showing 1 or 0 under it, in any
 // colour (right-click > LED colour). Copied into simulator/src/components/ by dc360/patch.js.
 import * as t from "io-ts"
-import { COLOR_COMPONENT_BORDER, COLOR_HIGH_IMPEDANCE, COLOR_UNKNOWN, COMPONENT_OUTLINE_THICKNESS, drawComponentName } from "../drawutils"
+import { COLOR_COMPONENT_BORDER, COLOR_HIGH_IMPEDANCE, COLOR_UNKNOWN, COMPONENT_OUTLINE_THICKNESS, GRID_STEP, drawComponentName } from "../drawutils"
 import { mods, span, style, title, tooltipContent } from "../htmlgen"
 import { template } from "../strings"
 import { ArrayFillWith, InteractionResult, LogicValue, isHighImpedance, isUnknown, typeOrUndefined } from "../utils"
@@ -108,8 +108,9 @@ export class DC360Led extends ParametrizedComponentBase<DC360LedRepr> {
         const values = this.parent.editor.options.hideOutputColors ? ArrayFillWith<LogicValue>(false, this.numBits) : this.value
         const on = this._color
         const off = dimmed(on)
-        const r = 9
-        const cy = b.top + 14
+        const K = GRID_STEP / 10 // pixel sizes follow the grid square, so the LEDs grow with it
+        const r = 9 * K
+        const cy = b.top + 14 * K
         g.save()
         for (let i = 0; i < this.numBits; i++) {
             const node = this.inputs.In[i]
@@ -121,7 +122,7 @@ export class DC360Led extends ParametrizedComponentBase<DC360LedRepr> {
                 g.fillStyle = on
                 g.globalAlpha = 0.3
                 g.beginPath()
-                g.arc(x, cy, r + 5, 0, 2 * Math.PI)
+                g.arc(x, cy, r + 5 * K, 0, 2 * Math.PI)
                 g.fill()
                 g.globalAlpha = 1
             }
@@ -135,15 +136,15 @@ export class DC360Led extends ParametrizedComponentBase<DC360LedRepr> {
             g.stroke()
             // a little shine
             g.beginPath()
-            g.arc(x - 3, cy - 3, 2.5, 0, 2 * Math.PI)
+            g.arc(x - 3 * K, cy - 3 * K, 2.5 * K, 0, 2 * Math.PI)
             g.fillStyle = "rgba(255,255,255,0.55)"
             g.fill()
             // 1 or 0 under it
             g.fillStyle = "#374151"
-            g.font = "bold 11px sans-serif"
+            g.font = `bold ${Math.round(11 * K)}px sans-serif`
             g.textAlign = "center"
             g.textBaseline = "middle"
-            g.fillText(isUnknown(v) || isHighImpedance(v) ? "?" : lit ? "1" : "0", x, b.bottom - 7)
+            g.fillText(isUnknown(v) || isHighImpedance(v) ? "?" : lit ? "1" : "0", x, b.bottom - 7 * K)
         }
         g.restore()
 
