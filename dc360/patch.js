@@ -34,6 +34,15 @@ function edit(file, label, fn) {
     console.log(file + ': ' + label);
 }
 
+// Replaces text that must appear exactly once.
+function once(src, find, repl) {
+    const n = src.split(find).length - 1;
+    if (n !== 1) {
+        throw new Error('expected "' + find + '" once, found ' + n);
+    }
+    return src.replace(find, repl);
+}
+
 // Inserts text after the line matching re (exactly `times` matches, default 1), with that line's indent.
 function afterLine(src, re, text, times) {
     const lines = src.split('\n');
@@ -103,6 +112,16 @@ edit('images.ts', 'add the DC360 parts\' pictures', src => {
     src = afterLine(src, /^import DisplayBar from '\.\.\/img\/DisplayBar\.svg'; \/\/ @ts-ignore\r?$/,
         names.map(n => "import " + n + " from '../img/" + n + ".svg'; // @ts-ignore").join('\n'));
     return afterLine(src, /^\s+DisplayBar,\r?$/, names.map(n => n + ',').join('\n'));
+});
+
+// Bigger IN and OUT on the drawing (the 1-bit circles: 26 px -> 40 px, their 0 / 1 text 18 px -> 26 px). Their
+// connection points stay where they were, so saved circuits keep their wiring.
+edit('drawutils.ts', 'make IN and OUT bigger on the drawing', src => {
+    src = once(src, 'export const INPUT_OUTPUT_DIAMETER = 26', 'export const INPUT_OUTPUT_DIAMETER = 40');
+    // drawValueTextCentered is only used for the 1-bit IN and OUT: those get the big text
+    src = once(src, 'drawValueText(g, value, comp.posX, comp.posY, opts)', 'drawValueText(g, value, comp.posX, comp.posY, { ...opts, big: true } as any)');
+    src = once(src, 'const sizeStrBig = small ? "12" : "18"', 'const sizeStrBig = small ? "12" : (opts as any)?.big ? "26" : "18"');
+    return once(src, 'const sizeStrSmall = small ? "10" : "16"', 'const sizeStrSmall = small ? "10" : (opts as any)?.big ? "22" : "16"');
 });
 
 console.log('DC360 parts added.');
