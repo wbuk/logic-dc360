@@ -2,7 +2,8 @@
 # Logic itself does not publish built releases. DC360 Libraries (Libraries > Apps) checks these releases, downloads
 # logic-dc360.zip and applies DC360's own changes on the DC360 server.
 #
-# DC360's own parts (dc360/: the Light Bulb and Table Lamp in Input/Output) are added to Logic's source by
+# DC360's own parts (dc360/: Push Button, Light Bulb, Table Lamp, Alarm Bell, UK Traffic Lights, Crossing and Door
+# Entry in Input/Output) are added to Logic's source by
 # dc360/patch.js before it is built; if Logic's source has moved on so that they no longer fit, the build stops.
 #
 # Runs every night: if Logic's master branch or DC360's parts have a new commit, Logic is built with its own bundler
@@ -111,6 +112,8 @@ jobs:
           # DC360's parts are in the build.
           unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q '"bulb"'
           unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q '"lamp"'
+          unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q '"traffic"'
+          unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q 'dc360push'
 
       - name: Publish the release
         if: steps.ver.outputs.exists == 'false'
@@ -118,7 +121,7 @@ jobs:
           gh release create "v${{ steps.ver.outputs.version }}" logic-dc360.zip \
             --repo "$GITHUB_REPOSITORY" \
             --title "Logic ${{ steps.ver.outputs.version }}" \
-            --notes "Logic built from jppellet/Logic-Circuit-Simulator master, commit ${{ steps.ver.outputs.sha }} (${{ steps.ver.outputs.date }}), with DC360's Light Bulb and Table Lamp added (dc360/, commit ${{ steps.ver.outputs.dsha }}). Logic is by Jean-Philippe Pellet (HEP Vaud), MIT License (LICENSE.txt in the zip). Includes Bootstrap and jQuery (MIT) in vendor/."
+            --notes "Logic built from jppellet/Logic-Circuit-Simulator master, commit ${{ steps.ver.outputs.sha }} (${{ steps.ver.outputs.date }}), with DC360's own Input/Output parts added (dc360/, commit ${{ steps.ver.outputs.dsha }}). Logic is by Jean-Philippe Pellet (HEP Vaud), MIT License (LICENSE.txt in the zip). Includes Bootstrap and jQuery (MIT) in vendor/."
 
       # GitHub switches off nightly jobs in a repository with no activity for 60 days. On the 1st of each month
       # this records the last check, which keeps the nightly build running even when Logic has not changed.
