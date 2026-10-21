@@ -1,9 +1,13 @@
 # Builds Logic (https://github.com/jppellet/Logic-Circuit-Simulator, MIT) and publishes it as a release, because
 # Logic itself does not publish built releases. DC360 Libraries (Libraries > Apps) checks these releases, downloads
-# logic-dc360.zip and applies DC360's own changes on the DC360 server. Nothing DC360-specific is here.
+# logic-dc360.zip and applies DC360's own changes on the DC360 server.
 #
-# Runs every night: if Logic's master branch has a new commit, it is built with Logic's own bundler
-# (tools/bundle.js --dist) and released as vYYYY.MMDD.HHMM (the time of that commit, UTC), so newer is always higher.
+# DC360's own parts (dc360/: the Light Bulb and Table Lamp in Input/Output) are added to Logic's source by
+# dc360/patch.js before it is built; if Logic's source has moved on so that they no longer fit, the build stops.
+#
+# Runs every night: if Logic's master branch or DC360's parts have a new commit, Logic is built with its own bundler
+# (tools/bundle.js --dist) and released as vYYYY.MMDD.HHMM (the time of the newer of those two commits, UTC), so newer
+# is always higher.
 # Logic's editor asks for Bootstrap 4.6.1 and jQuery 3.5.1 from a CDN; exact copies of those two (both MIT) are put
 # in vendor/ so a site can serve everything itself.
 name: Build Logic
@@ -25,6 +29,8 @@ jobs:
     steps:
       - name: Check out this repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check out Logic (master)
         uses: actions/checkout@v4
@@ -36,10 +42,17 @@ jobs:
       - name: Work out the version
         id: ver
         run: |
+          # DC360's parts: the last commit that changed dc360/ or this workflow (not the monthly keep-alive).
+          DSHA=$(git log -1 --format=%H -- dc360 .github)
+          DVER=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y.%m%d.%H%M -- dc360 .github)
           cd logic
           SHA=$(git rev-parse HEAD)
-          VERSION=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y.%m%d.%H%M)
+          LVER=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y.%m%d.%H%M)
+          # The newer of the two (same fixed-width format, so text order is time order).
+          VERSION=$LVER
+          if [[ "$DVER" > "$LVER" ]]; then VERSION=$DVER; fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "dsha=$DSHA" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "date=$(TZ=UTC git log -1 --format=%cd --date=format-local:'%d %b %Y %H:%M UTC')" >> "$GITHUB_OUTPUT"
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
@@ -54,6 +67,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Add DC360's parts
+        if: steps.ver.outputs.exists == 'false'
+        run: node dc360/patch.js logic
 
       - name: Build Logic
         if: steps.ver.outputs.exists == 'false'
@@ -80,8 +97,8 @@ jobs:
           cp bs/package/LICENSE "$OUT/vendor/bootstrap@$BS/LICENSE.txt"
           cp jq/package/dist/jquery.slim.min.js "$OUT/vendor/jquery@$JQ/dist/"
           cp jq/package/LICENSE.txt "$OUT/vendor/jquery@$JQ/LICENSE.txt"
-          printf '{"source":"jppellet/Logic-Circuit-Simulator","commit":"%s","version":"%s","bootstrap":"%s","jquery":"%s","built":"%s"}\n' \
-            "${{ steps.ver.outputs.sha }}" "${{ steps.ver.outputs.version }}" "$BS" "$JQ" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$OUT/logic-build.json"
+          printf '{"source":"jppellet/Logic-Circuit-Simulator","commit":"%s","dc360":"%s","version":"%s","bootstrap":"%s","jquery":"%s","built":"%s"}\n' \
+            "${{ steps.ver.outputs.sha }}" "${{ steps.ver.outputs.dsha }}" "${{ steps.ver.outputs.version }}" "$BS" "$JQ" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$OUT/logic-build.json"
           cd "$OUT" && zip -qr "$GITHUB_WORKSPACE/logic-dc360.zip" .
 
       - name: Check the build
@@ -91,6 +108,9 @@ jobs:
           unzip -l logic-dc360.zip | grep -q 'simulator/lib/bundle.js$'
           unzip -l logic-dc360.zip | grep -q 'bootstrap.min.css$'
           unzip -l logic-dc360.zip | grep -q 'jquery.slim.min.js$'
+          # DC360's parts are in the build.
+          unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q '"bulb"'
+          unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q '"lamp"'
 
       - name: Publish the release
         if: steps.ver.outputs.exists == 'false'
@@ -98,7 +118,7 @@ jobs:
           gh release create "v${{ steps.ver.outputs.version }}" logic-dc360.zip \
             --repo "$GITHUB_REPOSITORY" \
             --title "Logic ${{ steps.ver.outputs.version }}" \
-            --notes "Logic built from jppellet/Logic-Circuit-Simulator master, commit ${{ steps.ver.outputs.sha }} (${{ steps.ver.outputs.date }}). Logic is by Jean-Philippe Pellet (HEP Vaud), MIT License (LICENSE.txt in the zip). Includes Bootstrap and jQuery (MIT) in vendor/."
+            --notes "Logic built from jppellet/Logic-Circuit-Simulator master, commit ${{ steps.ver.outputs.sha }} (${{ steps.ver.outputs.date }}), with DC360's Light Bulb and Table Lamp added (dc360/, commit ${{ steps.ver.outputs.dsha }}). Logic is by Jean-Philippe Pellet (HEP Vaud), MIT License (LICENSE.txt in the zip). Includes Bootstrap and jQuery (MIT) in vendor/."
 
       # GitHub switches off nightly jobs in a repository with no activity for 60 days. On the 1st of each month
       # this records the last check, which keeps the nightly build running even when Logic has not changed.
