@@ -66,7 +66,7 @@ copyDir(path.join(here, 'src'), path.join(sim, 'src'));
 copyDir(path.join(here, 'img'), path.join(sim, 'img'));
 
 // DC360's parts: [Def, file in components/, button / picture name, hover text, button caption, button params]. The
-// Push Button is Logic's own IN, made a push button (see ComponentMenu and ComponentFactory below), so it has no Def.
+// Push Button and Light Switch are Logic's own IN with a DC360 look (LOOKS below), so they have no Def.
 const PARTS = [
     ['DC360BulbDef', 'DC360Lights', 'DC360Bulb', 'Light bulb: lights up when its input is 1', 'Light Bulb'],
     ['DC360LampDef', 'DC360Lights', 'DC360Lamp', 'Table lamp: lights up when its input is 1', 'Table Lamp'],
@@ -77,41 +77,67 @@ const PARTS = [
     ['DC360CrossingDef', 'DC360Panels', 'DC360Crossing', 'UK crossing lights: red, amber, green, and the red and green man', 'Crossing'],
     ['DC360DoorDef', 'DC360Panels', 'DC360Door', 'Door entry panel: one input lights NO ENTRY (red), the other ENTER (green)', 'Door Entry'],
 ];
-const PUSH = ['DC360PushButton', 'Push button: an input that is 1 only while you hold it down', 'Push Button'];
+// Inputs that are Logic's own IN with a DC360 picture: [button / picture name, hover text, button caption, look].
+// "push" is Logic's own push-button IN; "switch" is an IN with dc360look "switch" (saved with the circuit).
+const LOOKS = [
+    ['DC360PushButton', 'Push button: an input that is 1 only while you hold it down', 'Push Button', 'push'],
+    ['DC360LightSwitch', 'Light switch: click it to switch it on (1) or off (0); it stays that way', 'Light Switch', 'switch'],
+];
 
 const files = [...new Set(PARTS.map(p => p[1]))];
 const imports = files.map(f => 'import { ' + [...new Set(PARTS.filter(p => p[1] === f).map(p => p[0]))].join(', ') + ' } from "./components/' + f + '"').join('\n');
 const defs = [...new Set(PARTS.map(p => p[0]))];
 
-edit('ComponentFactory.ts', 'register the DC360 parts and make the Push Button a push button', src => {
+edit('ComponentFactory.ts', 'register the DC360 parts and give the Push Button and Light Switch their looks', src => {
     src = afterLine(src, /^import \{ DisplayBar, DisplayBarDef \} from "\.\/components\/DisplayBar"\r?$/, imports);
     src = afterLine(src, /^\s+PixelDef,\r?$/, defs.map(d => d + ',').join('\n'));
-    // A button marked data-dc360push gives an IN that is a push button.
+    // A button marked data-dc360look gives an IN with that look.
     return afterLine(src, /^\s+const params = paramsStr === undefined \? undefined : JSON5\.parse\(paramsStr\) as Record<string, unknown>\r?$/,
-        'if (elem.dataset.dc360push === "1") {\n    const pushComp = this.getMaker(compDataset.type)?.make(parent, params)\n    ;(pushComp as any)?.doSetIsPushButton?.(true)\n    return pushComp\n}');
+        'const dc360look = (elem.dataset as any).dc360look\n' +
+        'if (dc360look !== undefined) {\n' +
+        '    const lookComp: any = this.getMaker(compDataset.type)?.make(parent, params)\n' +
+        '    if (dc360look === "push") { lookComp?.doSetIsPushButton?.(true) } else if (lookComp !== undefined) { lookComp._dc360look = dc360look }\n' +
+        '    return lookComp\n' +
+        '}');
 });
 
 edit('ComponentMenu.ts', 'add the DC360 parts to Input/Output', src => {
     src = afterLine(src, /^import \{ DisplayBarDef \} from "\.\/components\/DisplayBar"\r?$/, imports);
-    src = afterLine(src, /^\s+InputDef\.button\(\{ bits: 1 \}, "Input1"\),\r?$/, 'InputDef.button({ bits: 1 }, "' + PUSH[0] + '"),');
+    src = afterLine(src, /^\s+InputDef\.button\(\{ bits: 1 \}, "Input1"\),\r?$/, LOOKS.map(l => 'InputDef.button({ bits: 1 }, "' + l[0] + '"),').join('\n'));
     src = afterLine(src, /^\s+PixelDef\.button\(.*"Pixel".*\),\r?$/, PARTS.map(p => p[0] + '.button(' + (p[5] ? p[5] + ', ' : '') + '"' + p[2] + '"),').join('\n'));
-    // The Push Button's button is marked, so the part made from it is a push button.
+    // The Push Button's and Light Switch's buttons are marked, so the IN made from them gets that look.
+    const marks = '{ ' + LOOKS.map(l => l[0] + ': "' + l[3] + '"').join(', ') + ' } as Record<string, string>';
     return afterLine(src, /^\s+const isGate = item\.type\.startsWith\(GateTypePrefix\)\r?$/,
-        'if (stringsKey === "' + PUSH[0] + '") { (compButton.dataset as any).dc360push = "1" }');
+        'if ((' + marks + ')[stringsKey] !== undefined) { (compButton.dataset as any).dc360look = (' + marks + ')[stringsKey] }');
 });
 
 // The button names, in every language Logic has (its English and French lists both have the light bar).
 edit('strings.ts', 'name the DC360 parts\' buttons', src => {
     const n = (src.match(/^\s+DisplayBar: \[".*"\],\r?$/gm) || []).length;
-    const lines = [...PARTS.map(p => [p[2], p[3], p[4]]), PUSH].map(p => p[0] + ': ["' + p[1] + '", "' + p[2] + '"],').join('\n');
+    const lines = [...PARTS.map(p => [p[2], p[3], p[4]]), ...LOOKS].map(p => p[0] + ': ["' + p[1] + '", "' + p[2] + '"],').join('\n');
     return afterLine(src, /^\s+DisplayBar: \[".*"\],\r?$/, lines, n || 1);
 });
 
 edit('images.ts', 'add the DC360 parts\' pictures', src => {
-    const names = [...PARTS.map(p => p[2]), PUSH[0]];
+    const names = [...PARTS.map(p => p[2]), ...LOOKS.map(l => l[0])];
     src = afterLine(src, /^import DisplayBar from '\.\.\/img\/DisplayBar\.svg'; \/\/ @ts-ignore\r?$/,
         names.map(n => "import " + n + " from '../img/" + n + ".svg'; // @ts-ignore").join('\n'));
     return afterLine(src, /^\s+DisplayBar,\r?$/, names.map(n => n + ',').join('\n'));
+});
+
+// An IN with a DC360 look is drawn with its picture (dc360/src/components/DC360InputLooks.ts), not as the IN circle:
+// a push button as a button, a light switch as a switch. The light switch's look is saved with the circuit.
+edit('components/Input.ts', 'draw push buttons and light switches with their pictures', src => {
+    src = afterLine(src, /^import \{ Node, NodeIn, NodeOut \} from "\.\/Node"\r?$/, 'import { dc360DrawLightSwitch, dc360DrawPushButton } from "./DC360InputLooks"');
+    src = once(src, '            this.doDrawSingle(g, ctx, this.outputs.Out[0])',
+        '            if ((this as any)._dc360look === "switch") { dc360DrawLightSwitch(this, g, ctx, this.outputs.Out[0]); return }\n' +
+        '            if ((this as any).isPushButton === true) { dc360DrawPushButton(this, g, ctx, this.outputs.Out[0]); return }\n' +
+        '            this.doDrawSingle(g, ctx, this.outputs.Out[0])');
+    src = afterLine(src, /^\s+isPushButton: typeOrUndefined\(t\.boolean\),\r?$/, 'dc360look: typeOrUndefined(t.string),');
+    src = once(src, 'this._isPushButton = saved?.isPushButton ?? InputDef.aults.isPushButton',
+        'this._isPushButton = saved?.isPushButton ?? InputDef.aults.isPushButton\n        ;(this as any)._dc360look = (saved as any)?.dc360look');
+    return once(src, 'isPushButton: (this._isPushButton !== InputDef.aults.isPushButton) ? this._isPushButton : undefined,',
+        'isPushButton: (this._isPushButton !== InputDef.aults.isPushButton) ? this._isPushButton : undefined,\n            dc360look: (this as any)._dc360look,');
 });
 
 // Bigger parts on the drawing, for younger students (zoom stays at 100%, for accessibility only):
