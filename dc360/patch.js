@@ -152,4 +152,44 @@ edit('drawutils.ts', 'make all parts bigger on the drawing', src => {
     return once(src, 'const sizeStrSmall = small ? "10" : "16"', 'const sizeStrSmall = small ? "10" : (opts as any)?.big ? "22" : "16"');
 });
 
+// Wires: a little thicker (8 px -> 11 px), and animated by default with glowing sparks that run along every wire
+// carrying a 1, in the direction the signal travels (wires carrying 0 stay still). Logic's own "Animate wires"
+// setting still switches the animation off, for anyone who needs that.
+edit('drawutils.ts', 'thicker wires with sparks', src => {
+    src = once(src, 'export const WIRE_WIDTH = 8', 'export const WIRE_WIDTH = 11');
+    src = once(src, '            // animate the line',
+        '            // DC360: sparks instead of Logic\'s dashes\n' +
+        '            dc360Sparks(g, value, timeFraction)\n' +
+        '            g.lineCap = oldLineCap\n' +
+        '            return\n' +
+        '            // animate the line');
+    return src + '\n\n' +
+        '// DC360 (github.com/wbuk/logic-dc360): the wire in its value colour, then, for a 1, glowing sparks moving along it.\n' +
+        'function dc360Sparks(g: GraphicsRendering, value: LogicValue, timeFraction: number) {\n' +
+        '    g.stroke()\n' +
+        '    if (value !== true) {\n' +
+        '        return\n' +
+        '    }\n' +
+        '    const gap = 28\n' +
+        '    const oldCap = g.lineCap\n' +
+        '    const oldWidth = g.lineWidth\n' +
+        '    g.lineCap = "round"\n' +
+        '    g.setLineDash([0.01, gap])\n' +
+        '    // three sparks a second pass each point; a whole number of gaps, so the loop is seamless\n' +
+        '    g.lineDashOffset = -timeFraction * gap * 3\n' +
+        '    g.lineWidth = WIRE_WIDTH * 0.95 * _wireWidthFactor\n' +
+        '    g.strokeStyle = "rgba(255, 245, 160, 0.55)"\n' +
+        '    g.stroke()\n' +
+        '    g.lineWidth = WIRE_WIDTH * 0.55 * _wireWidthFactor\n' +
+        '    g.strokeStyle = "#ffffff"\n' +
+        '    g.stroke()\n' +
+        '    g.setLineDash([])\n' +
+        '    g.lineDashOffset = 0\n' +
+        '    g.lineCap = oldCap\n' +
+        '    g.lineWidth = oldWidth\n' +
+        '}\n';
+});
+
+edit('LogicEditor.ts', 'animate wires by default', src => once(src, '    animateWires: false,', '    animateWires: true,'));
+
 console.log('DC360 parts added.');
