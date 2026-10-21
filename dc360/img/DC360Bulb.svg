@@ -1,0 +1,6 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" fill="currentColor">
+	<path fill="#ffd23f" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" d="M25,4c-8.3,0-15,6.5-15,14.6c0,5.2,2.7,8.6,5.2,11.4c1.6,1.8,2.8,3.6,2.8,6.5h14c0-2.9,1.2-4.7,2.8-6.5c2.5-2.8,5.2-6.2,5.2-11.4C40,10.5,33.3,4,25,4z" />
+	<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M21,36V25l2.5-4l2.5,4l2.5-4l2.5,4v11" />
+	<rect x="18" y="37" width="14" height="7" rx="1" fill="#9ca3af" stroke="currentColor" stroke-width="2" />
+	<rect x="21.5" y="44" width="7" height="3" rx="1" />
+</svg>
