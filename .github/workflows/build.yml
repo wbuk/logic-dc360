@@ -2,7 +2,7 @@
 # Logic itself does not publish built releases. DC360 Libraries (Libraries > Apps) checks these releases, downloads
 # logic-dc360.zip and applies DC360's own changes on the DC360 server.
 #
-# DC360's own parts (dc360/: Push Button, Light Bulb, Table Lamp, Alarm Bell, UK Traffic Lights, Crossing and Door
+# DC360's own parts (dc360/: Push Button, Light Switch, Light Bulb, Table Lamp, Alarm Bell, UK Traffic Lights, Crossing and Door
 # Entry in Input/Output) are added to Logic's source by
 # dc360/patch.js before it is built; if Logic's source has moved on so that they no longer fit, the build stops.
 #
@@ -113,7 +113,7 @@ jobs:
           unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q '"bulb"'
           unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q '"lamp"'
           unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q '"traffic"'
-          unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q 'dc360push'
+          unzip -p logic-dc360.zip simulator/lib/bundle.js | grep -q 'dc360look'
 
       - name: Publish the release
         if: steps.ver.outputs.exists == 'false'
